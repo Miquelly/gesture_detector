@@ -27,7 +27,7 @@ class StreamChannel(Channel):
                 return (msg, dropped)
 
 def plot_lines(ax, lines, x_list, y_list, c_lists):
-    # Limpa as linhas anteriores##
+    # Limpa as linhas anteriores
     
     for line in lines:
         line.set_xdata([])
