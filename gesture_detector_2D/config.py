@@ -1,6 +1,6 @@
 from is_msgs.image_pb2 import HumanKeypoints as HKP
 
-camera_id = "0"
+camera_id = "1"
 
 array_color = ['b-', '#EEAD2D', 'r-', 'g-']
 
