@@ -1,21 +1,16 @@
 import socket
 import colorsys
+from typing import List, Dict, Tuple
 from itertools import permutations
-from typing import List
 
 import cv2
-import sys
-from google.protobuf.json_format import ParseDict
-
-
-from is_msgs.image_pb2 import HumanKeypoints as HKP
-from is_msgs.image_pb2 import ObjectAnnotations
-from is_wire.core import Channel, Message, Subscription
 import numpy as np
-import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
+
 import matplotlib
-from gesture import gesture
+import matplotlib.pyplot as plt
+from is_msgs.image_pb2 import HumanKeypoints as HKP
+from is_wire.core import Channel, Message, Subscription
+from is_msgs.image_pb2 import ObjectAnnotations
 
 matplotlib.use("Agg")
 
@@ -82,32 +77,63 @@ class App(object):
             (HKP.Value("RIGHT_EYE"), HKP.Value("RIGHT_EAR")),
         ]
 
-        comparator =  HKP.Value("NOSE")
-        self.group = [
-                    (HKP.Value("LEFT_WRIST"), comparator),
-                    (HKP.Value("RIGHT_WRIST"), comparator),
-                    ]
-        
-        self.list_id = {}
+        self.gesture_id : Dict = {}
 
-    def _id_to_rgb_color(self, id, id_color):
-        # Calcula a matiz (cor) com base no ID usando o operador módulo
-        hue = (id % id_color) / id_color
-        # Define uma saturação e luminosidade fixas para cores vibrantes
+
+    def _id_to_rgb_color(self, id) -> Tuple[float, float, float]:
+
+        hue = (id % 20) / 20
         saturation = 0.8
         luminance = 0.6
-        # Converte a cor de HSL para RGB
         r, g, b = [x for x in colorsys.hls_to_rgb(hue, luminance, saturation)]
+
         return r, g, b
 
     def render_skeletons_3d(self, skeletons):
 
         for skeleton in skeletons.objects:
-            parts = {}
+
+            if skeleton.id not in self.gesture_id.keys():
+                self.gesture_id[skeleton.id] = []        
+
+            if len(self.gesture_id[skeleton.id]) == 10:
+                self.gesture_id[skeleton.id].pop(0)
+
+            parts : Dict = {}
+            parts_comparator: Dict[int, float] = {}
+            
             for part in skeleton.keypoints:
                 parts[part.id] = (part.position.x, part.position.y, part.position.z)
+                parts_comparator[part.id] = part.position.z
 
-            id_color = gesture(self.group, parts)
+            if parts_comparator[HKP.Value("RIGHT_WRIST")] > parts_comparator[HKP.Value("NOSE")]:
+                
+                if parts_comparator[HKP.Value("LEFT_WRIST")] > parts_comparator[HKP.Value("NOSE")]:
+
+                    id_color = 710
+
+                else: 
+
+                    id_color = 720
+            else:
+
+                if parts_comparator[HKP.Value("LEFT_WRIST")] > parts_comparator[HKP.Value("NOSE")]:
+
+                    id_color = 703
+
+                else: 
+
+                    id_color = skeleton.id
+
+            self.gesture_id[skeleton.id].append(id_color)
+
+            values, counts = np.unique(self.gesture_id[skeleton.id], return_counts=True)
+
+            # Encontrando o índice do valor com a contagem mais alta.
+            indices = np.argmax(counts)
+
+            # Calculando a moda.
+            moda_id = int(values[indices])
             
             for link_parts in self.links:
                 begin, end = link_parts
@@ -115,7 +141,7 @@ class App(object):
                     x_pair = [parts[begin][0], parts[end][0]]
                     y_pair = [parts[begin][1], parts[end][1]]
                     z_pair = [parts[begin][2], parts[end][2]]
-                    color = self._id_to_rgb_color(id=skeleton.id, id_color=id_color)
+                    color = self._id_to_rgb_color(id=moda_id)
                     self.ax.plot(
                         x_pair,
                         y_pair,
@@ -123,6 +149,7 @@ class App(object):
                         linewidth=3,
                         color=color,
                     )
+
 
     def run(self) -> None:
         plt.ioff()
@@ -145,7 +172,7 @@ class App(object):
                 self.render_skeletons_3d(objs)
                 self.fig.canvas.draw()
                 
-                # generate a image from a matplotlib figure
+                # generate a image from a matplotlib figure.
                 data = np.fromstring(
                     self.fig.canvas.tostring_rgb(), dtype=np.uint8, sep=""
                 )
